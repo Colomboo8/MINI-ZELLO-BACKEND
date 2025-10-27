@@ -59,6 +59,11 @@ wss.on("connection", (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   const token = url.searchParams.get("token")
 
+  console.log(`[Server] ========== NEW CONNECTION ==========`)
+  console.log(`[Server] Request URL: ${req.url}`)
+  console.log(`[Server] Extracted token: ${token}`)
+  console.log(`[Server] Current rooms:`, Array.from(rooms.keys()))
+
   if (!token) {
     console.log("[Server] Connection rejected: No token provided")
     ws.close(1008, "Token required")
@@ -66,7 +71,7 @@ wss.on("connection", (ws, req) => {
   }
 
   const clientId = uuidv4()
-  console.log(`[Server] New connection: ${clientId} with token: ${token}`)
+  console.log(`[Server] Assigned client ID: ${clientId}`)
 
   clients.set(clientId, { ws, token, clientId })
 
@@ -74,10 +79,15 @@ wss.on("connection", (ws, req) => {
   if (!room) {
     room = new Room(token)
     rooms.set(token, room)
-    console.log(`[Server] Created new room: ${token}`)
+    console.log(`[Server] Created new room with token: ${token}`)
+  } else {
+    console.log(`[Server] Joining existing room with token: ${token}`)
+    console.log(`[Server] Room currently has ${room.clients.size} clients`)
   }
 
   room.addClient(clientId)
+
+  console.log(`[Server] All clients in room ${token}:`, Array.from(room.clients))
 
   ws.send(
     JSON.stringify({
@@ -88,7 +98,7 @@ wss.on("connection", (ws, req) => {
     }),
   )
 
-  room.broadcast(
+  const broadcastResult = room.broadcast(
     {
       type: "peer_joined",
       clientId,
@@ -96,6 +106,7 @@ wss.on("connection", (ws, req) => {
     },
     clientId,
   )
+  console.log(`[Server] Broadcasted peer_joined to ${broadcastResult} clients`)
 
   ws.on("message", (data) => {
     try {
@@ -144,7 +155,8 @@ wss.on("connection", (ws, req) => {
   })
 
   ws.on("close", () => {
-    console.log(`[Server] Client ${clientId} disconnected`)
+    console.log(`[Server] ========== CLIENT DISCONNECTED ==========`)
+    console.log(`[Server] Client ${clientId} disconnected from room ${token}`)
 
     room.removeClient(clientId)
     clients.delete(clientId)
@@ -157,7 +169,9 @@ wss.on("connection", (ws, req) => {
 
     if (room.clients.size === 0) {
       rooms.delete(token)
-      console.log(`[Server] Room ${token} deleted`)
+      console.log(`[Server] Room ${token} deleted (empty)`)
+    } else {
+      console.log(`[Server] Room ${token} still has ${room.clients.size} clients`)
     }
   })
 
